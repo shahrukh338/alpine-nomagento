@@ -3,7 +3,7 @@ pipeline {
 	label 'agent1'
 	}
     stages {
-        stage('Deploy') {
+        stage('build') {
             steps {
          	sh 'sudo docker build --no-cache --no-squash -t nomage .'
                   }
