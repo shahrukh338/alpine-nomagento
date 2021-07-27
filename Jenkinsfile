@@ -5,7 +5,7 @@ pipeline {
     stages {
         stage('build') {
             steps {
-         	sh 'sudo docker build --no-cache --no-squash -t nomage .'
+         	sh 'sudo docker build --no-cache -t nomage .'
                   }
 		}
 	}
