@@ -1,0 +1,75 @@
+#!/bin/sh
+#nginx
+if [ "$VERBOSE" = "true" ]; then
+	mkdir -p /var/log/nginx
+	touch /var/log/nginx/error.log /var/log/nginx/access.log
+	tail -f /var/log/nginx/*.log &
+fi
+chown -R nginx:nginx /var/www
+nginx -g 'daemon off;' &
+#php
+if [[ "$VERBOSE" == "true" ]]; then
+	touch /var/log/php7/error.log
+	tail -f /var/log/php7/*.log &
+fi
+
+chown -R nobody:nobody /var/www
+php-fpm7 -F &
+#rabbitmq
+rabbitmq-server &
+#elasticsearch
+su - elasticsearch -c /usr/share/elasticsearch/bin/elasticsearch &
+#redis
+redis-server /etc/redis.conf &
+#varnish
+varnishd -f /etc/varnish/default.vcl &
+#mysql
+if [ ! -d "/run/mysqld" ]; then
+  mkdir -p /run/mysqld
+fi
+
+if [ -d /var/lib/mysql ]; then
+  echo "[i] MySQL directory already present, skipping creation"
+else
+  echo "[i] MySQL data directory not found, creating initial DBs"
+
+  mysql_install_db --user=root > /dev/null
+
+  if [ "$MYSQL_ROOT_PASSWORD" = "" ]; then
+    MYSQL_ROOT_PASSWORD=root
+    echo "[i] MySQL root Password: $MYSQL_ROOT_PASSWORD"
+  fi
+
+  MYSQL_DATABASE=${MYSQL_DATABASE:-"magento"}
+  MYSQL_USER=${MYSQL_USER:-"magento"}
+  MYSQL_PASSWORD=${MYSQL_PASSWORD:-"magento"}
+
+  tfile=`mktemp`
+  if [ ! -f "$tfile" ]; then
+      return 1
+  fi
+
+  cat << EOF > $tfile
+USE mysql;
+FLUSH PRIVILEGES;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY "$MYSQL_ROOT_PASSWORD" WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
+#ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+EOF
+
+  if [ "$MYSQL_DATABASE" != "" ]; then
+    echo "[i] Creating database: $MYSQL_DATABASE"
+    echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` CHARACTER SET utf8 COLLATE utf8_general_ci;" >> $tfile
+
+    if [ "$MYSQL_USER" != "" ]; then
+      echo "[i] Creating user: $MYSQL_USER with password $MYSQL_PASSWORD"
+      echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* to '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD';" >> $tfile
+    fi
+  fi
+
+  /usr/bin/mysqld --user=root --bootstrap --verbose=0 --skip-networking=0 < $tfile
+  rm -f $tfile
+fi
+
+
+exec /usr/bin/mysqld --user=root --console --skip-networking=0
