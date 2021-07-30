@@ -23,6 +23,29 @@ rm ioncube.tar.gz &&\
 mv ioncube/ioncube_loader_lin_7.4.so /var/www/ioncube_loader_lin_7.4.so &&\
 echo "zend_extension = /var/www/ioncube_loader_lin_7.4.so" >> /etc/php7/php.ini &&\
 
+apk add openssh openssh-client &&\
+mkdir -p /var/run/sshd &&\
+echo "magento:magento" | chpasswd &&\
+sed -ie "s/#PubkeyAuthentication/PubkeyAuthentication/g" /etc/ssh/sshd_config &&\
+echo "RSAAuthentication yes" >> /etc/ssh/sshd_config &&\
+#echo "ChallengeResponseAuthentication no" >> /etc/ssh/sshd_config
+sed -ie "s/#PasswordAuthentication yes/PasswordAuthentication yes/g" /etc/ssh/sshd_config &&\
+sed -ie "s/#Port 22/Port 22/g" /etc/ssh/sshd_config &&\
+sed -ie "s/#ListenAddress 0.0.0.0/ListenAddress 0.0.0.0/g" /etc/ssh/sshd_config &&\
+sed -ie "s/#HostKey \/etc\/ssh\/ssh_host_ecdsa_key/HostKey \/etc\/ssh\/ssh_host_ecdsa_key/g" /etc/ssh/sshd_config &&\
+sed -ie "s/#HostKey \/etc\/ssh\/ssh_host_rsa_key/HostKey \/etc\/ssh\/ssh_host_rsa_key/g" /etc/ssh/sshd_config &&\
+sed -ie "s/#HostKey \/etc\/ssh\/ssh_host_ed25519_key/HostKey \/etc\/ssh\/ssh_host_ed25519_key/g" /etc/ssh/sshd_config &&\
+mkdir  ~/.ssh &&\
+ssh-keygen -t rsa &&\
+touch ~/.ssh/authorized_keys &&\
+chmod -R 600 ~/.ssh/* &&\
+echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config &&\
+chown -R magento:magento ~/.ssh &&\
+chmod -R 700 ~/.ssh &&\
+rm -rf /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_dsa_key &&\
+ssh-keygen -A &&\
+/usr/sbin/sshd &&\
+
 export JAVA_HOME=/usr/lib/jvm/java-11-openjdk &&\
 
 wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.8.0-linux-x86_64.tar.gz &&\
@@ -71,6 +94,6 @@ COPY default.vcl /etc/varnish/
 COPY varnish /etc/default/
 COPY phpinfo.php /var/www/html/
 WORKDIR /var/www/html/magento
-#ENTRYPOINT ["/startup.sh"]
-CMD ["/startup.sh", "&&", "/mage.sh"]
+ENTRYPOINT ["/startup.sh"]
+#CMD ["/startup.sh", "&&", "/mage.sh"]
 EXPOSE 5672 15672 4369 9200 80 443 6379 8888 6082 3306 9000
