@@ -11,8 +11,8 @@ pipeline {
 	     stages {
 			 stage('tag and push') {
 			 steps {
-sh '''docker tag nomage dockerhub.kensium.com/magento-singleimg/nomage
-docker push dockerhub.kensium.com/magento-singleimg/nomage'''
+sh '''sudo docker tag nomage dockerhub.kensium.com/magento-singleimg/nomage
+sudo docker push dockerhub.kensium.com/magento-singleimg/nomage'''
 				}	
 			}
 		}
