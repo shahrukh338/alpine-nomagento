@@ -1,75 +1,47 @@
 #!/bin/sh
+/usr/sbin/sshd
 #nginx
-if [ "$VERBOSE" = "true" ]; then
-	mkdir -p /var/log/nginx
-	touch /var/log/nginx/error.log /var/log/nginx/access.log
-	tail -f /var/log/nginx/*.log &
-fi
-chown -R nginx:nginx /var/www
 nginx -g 'daemon off;' &
 #php
-if [[ "$VERBOSE" == "true" ]]; then
-	touch /var/log/php7/error.log
-	tail -f /var/log/php7/*.log &
-fi
-
-chown -R nobody:nobody /var/www
 php-fpm7 -F &
 #rabbitmq
+rabbitmq-plugins enable --offline rabbitmq_management
 rabbitmq-server &
 #elasticsearch
 su - elasticsearch -c /usr/share/elasticsearch/bin/elasticsearch &
 #redis
-redis-server /etc/redis.conf &
+redis-server --daemonize yes
 #varnish
 varnishd -f /etc/varnish/default.vcl &
 #mysql
 if [ ! -d "/run/mysqld" ]; then
-  mkdir -p /run/mysqld
+   mkdir -p /run/mysqld
+   chown -R mysql:mysql /run/mysqld
 fi
-
-if [ -d /var/lib/mysql ]; then
-  echo "[i] MySQL directory already present, skipping creation"
-else
-  echo "[i] MySQL data directory not found, creating initial DBs"
-
-  mysql_install_db --user=root > /dev/null
-
-  if [ "$MYSQL_ROOT_PASSWORD" = "" ]; then
-    MYSQL_ROOT_PASSWORD=root
-    echo "[i] MySQL root Password: $MYSQL_ROOT_PASSWORD"
-  fi
-
-  MYSQL_DATABASE=${MYSQL_DATABASE:-"magento"}
-  MYSQL_USER=${MYSQL_USER:-"magento"}
-  MYSQL_PASSWORD=${MYSQL_PASSWORD:-"magento"}
-
-  tfile=`mktemp`
-  if [ ! -f "$tfile" ]; then
-      return 1
-  fi
-
-  cat << EOF > $tfile
+   chown -R mysql:mysql /var/lib/mysql
+   echo 'Initializing database'
+   mysql_install_db --user=mysql --basedir=/usr --datadir=/var/lib/mysql > /dev/null
+   tfile=`mktemp`
+   if [ ! -f "$tfile" ]; then
+   return 1
+   fi
+# save sql
+   echo "[i] Create temp file: $tfile"
+   cat << EOF > $tfile
 USE mysql;
 FLUSH PRIVILEGES;
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY "$MYSQL_ROOT_PASSWORD" WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION;
-#ALTER USER 'root'@'localhost' IDENTIFIED BY '';
+DELETE FROM mysql.user;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'root' WITH GRANT OPTION;
 EOF
-
-  if [ "$MYSQL_DATABASE" != "" ]; then
-    echo "[i] Creating database: $MYSQL_DATABASE"
-    echo "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` CHARACTER SET utf8 COLLATE utf8_general_ci;" >> $tfile
-
-    if [ "$MYSQL_USER" != "" ]; then
-      echo "[i] Creating user: $MYSQL_USER with password $MYSQL_PASSWORD"
-      echo "GRANT ALL ON \`$MYSQL_DATABASE\`.* to '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD';" >> $tfile
-    fi
-  fi
-
-  /usr/bin/mysqld --user=root --bootstrap --verbose=0 --skip-networking=0 < $tfile
-  rm -f $tfile
-fi
-
-
-exec /usr/bin/mysqld --user=root --console --skip-networking=0
+   echo "[i] Creating database: magento"
+   echo "CREATE DATABASE IF NOT EXISTS magento CHARACTER SET utf8 COLLATE utf8_general_ci;" >> $tfile
+   echo "GRANT ALL ON magento.* to 'magento'@'%' IDENTIFIED BY 'magento';" >> $tfile
+   echo 'FLUSH PRIVILEGES;' >> $tfile
+   echo 'SET GLOBAL log_bin_trust_function_creators = 1;' >> $tfile
+   echo "[i] run tempfile: $tfile"
+   /usr/bin/mysqld --user=mysql --bootstrap --verbose=0 < $tfile
+   rm -f $tfile
+echo "[i] Sleeping 5 sec"
+sleep 5
+echo "Starting all process"
+exec /usr/bin/mysqld --user=mysql --console --log-bin-trust-function-creators=1
