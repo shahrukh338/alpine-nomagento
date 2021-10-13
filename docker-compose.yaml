@@ -1,0 +1,33 @@
+version: '3'
+services:
+ frontend:
+   image: pavan5107/k8s:alpine-nomagento
+   container_name: alpine-no-magento
+   ports:
+      - '3306:3306'
+      - '9000:9000'
+      - '9200:9200'
+      - '9300:9300'
+      - '6379:6379'
+      - '4369:4369'
+      - '80:80'
+      - '8888:8888'
+      - '5672:5672'
+      - '15672:15672'
+   volumes:
+     - mysqldata:/var/lib/mysql
+     - elasticsearch_data:/var/lib/elasticsearch/data
+     - redis_data:/var/lib/redis
+     - varnish_data:/etc/default
+     - nginx_data:/var/log/nginx
+   networks:
+       - dragon
+volumes:
+  mysqldata:
+  nginx_data:
+  elasticsearch_data:
+  redis_data:
+  varnish_data:
+networks:
+  dragon:
+   driver: bridge
